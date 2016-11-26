@@ -74,9 +74,13 @@
       <Name>Microsoft.Fx.Portability</Name>
     </ProjectReference>
   </ItemGroup>
-  <ItemGroup />
   <ItemGroup>
     <Content Include="Properties\version.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="System.Reflection.Metadata.Cil">
+      <HintPath>..\..\..\corefxlab\src\System.Reflection.Metadata.Cil\bin\Debug\netstandard1.5\System.Reflection.Metadata.Cil.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\Portable\$(TargetFrameworkVersion)\Microsoft.Portable.CSharp.targets" />
   <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), dir.targets))\dir.targets" />

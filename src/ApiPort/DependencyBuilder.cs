@@ -1,6 +1,8 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
+#define DEBUG_SERVICE
+
 using Autofac;
 using Microsoft.Fx.Portability;
 using Microsoft.Fx.Portability.Analysis;
@@ -33,7 +35,7 @@ namespace ApiPort
 #if DEBUG_SERVICE
             // For debug purposes, the FileOutputApiPortService helps as it serializes the request to json and opens it with the
             // default json handler. To use this service, uncomment the the next line and comment the one after that.
-            container.RegisterType<FileOutputApiPortService>()
+            builder.RegisterType<FileOutputApiPortService>()
                 .As<IApiPortService>()
                 .SingleInstance();
 #else

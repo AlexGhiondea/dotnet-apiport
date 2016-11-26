@@ -9,6 +9,9 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection.Metadata;
+using System.Reflection.Metadata.Cil;
+using System.Reflection.Metadata.Cil.Instructions;
+using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 
 namespace Microsoft.Fx.Portability.Analyzer
@@ -122,6 +125,63 @@ namespace Microsoft.Fx.Portability.Analyzer
 
                     AddReferencedAssemblies(metadataReader);
 
+                    CilAssembly c = CilAssembly.Create(file.Name);
+
+                    // let's create a map of all the types that are used inside the code, and where they are comming from
+
+                    Dictionary<string, HashSet<string>> mapTypeToCaller = new Dictionary<string, HashSet<string>>();
+
+                    HashSet<string> typeRefs = new HashSet<string>(c.TypeReferences.Select(n => n.FullName));
+
+                    foreach (var item in c.TypeReferences)
+                    {
+                        Console.WriteLine($"{item.Token}: {item.FullName}");
+                    }
+
+                    foreach (var typeDef in c.TypeDefinitions)
+                    {
+                        Console.WriteLine($"Found type {typeDef.Name}");
+                        foreach (var memberDef in typeDef.MethodDefinitions)
+                        {
+                            Console.WriteLine($"  Found method {memberDef.Name}");
+                            foreach (var item in memberDef.Instructions)
+                            {
+                                if (item.opCode.OperandType == System.Reflection.Emit.OperandType.InlineMethod)
+                                {
+                                    var val = item as CilStringInstruction;
+                                    if (val == null)
+                                    {
+                                        continue;
+                                    }
+
+                                    string typeRef = string.Empty;
+                                    if (val.ParentType.Type == System.Reflection.Metadata.Cil.Decoder.TypeType.Spec)
+                                    {
+                                        // do we have a type ref that matches?
+                                        typeRef = MatchTypeSpecToTypeRef(val.ParentType.Name, typeRefs);
+                                    }
+                                    else if (val.ParentType.Type == System.Reflection.Metadata.Cil.Decoder.TypeType.Ref)
+                                    {
+                                        typeRef = val.ParentType.ToString();
+                                    }
+
+                                    if (!string.IsNullOrEmpty(typeRef))
+                                    {
+                                        HashSet<string> calledFrom;
+                                        if (!mapTypeToCaller.TryGetValue(typeRef, out calledFrom))
+                                        {
+                                            calledFrom = new HashSet<string>();
+                                            mapTypeToCaller[typeRef] = calledFrom;
+                                        }
+
+                                        calledFrom.Add(memberDef.MethodNameAndParameters());
+                                    }
+                                    Console.WriteLine(val.opCode + " " + val.Value);
+                                }
+                            }
+                        }
+                    }
+
                     var helper = new DependencyFinderEngineHelper(_assemblyFilter, metadataReader, file);
                     helper.ComputeData();
 
@@ -140,6 +200,19 @@ namespace Microsoft.Fx.Portability.Analyzer
                 // more details on the scenario that hit them
                 throw new PortabilityAnalyzerException(string.Format(LocalizedStrings.MetadataParsingExceptionMessage, file.Name), exc);
             }
+        }
+
+
+        private static string MatchTypeSpecToTypeRef(string typeSpec, HashSet<string> typeRefs)
+        {
+            // do we have a type ref that matches?
+            string bestMatch = "";
+            foreach (var tr in typeRefs)
+            {
+                if (typeSpec.StartsWith(tr) && tr.Length > bestMatch.Length)
+                    bestMatch = tr;
+            }
+            return bestMatch;
         }
 
         /// <summary>
