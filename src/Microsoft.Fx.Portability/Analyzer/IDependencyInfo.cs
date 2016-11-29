@@ -10,6 +10,7 @@ namespace Microsoft.Fx.Portability.Analyzer
     public interface IDependencyInfo
     {
         IDictionary<MemberInfo, ICollection<AssemblyInfo>> Dependencies { get; }
+        IDictionary<string, ICollection<string>> CallMap { get; }
         IEnumerable<string> AssembliesWithErrors { get; }
         IDictionary<string, ICollection<string>> UnresolvedAssemblies { get; }
         IEnumerable<AssemblyInfo> UserAssemblies { get; }

@@ -6,10 +6,13 @@ using Microsoft.Fx.Portability.ObjectModel;
 using Microsoft.Fx.Portability.Reporting;
 using Microsoft.Fx.Portability.Reporting.ObjectModel;
 using Microsoft.Fx.Portability.Resources;
+using Microsoft.Fx.Portability.Utils.JsonConverters;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.Versioning;
 using System.Threading.Tasks;
 
 namespace Microsoft.Fx.Portability
@@ -113,7 +116,10 @@ namespace Microsoft.Fx.Portability
                 _progressReport.ReportIssue(string.Format(LocalizedStrings.InvalidFileName, errorInput));
             }
 
-            var results = await GetAnalysisResultAsync(options);
+            // compute this here since we might need this information once the results come back.
+            IDependencyInfo dependencyInfo = _dependencyFinder.FindDependencies(options.InputAssemblies, _progressReport);
+
+            MultipleFormatAnalysis results = await GetAnalysisResultAsync(dependencyInfo, options);
             var outputPaths = new List<string>();
 
             AnalyzeResponse response = null;
@@ -123,6 +129,24 @@ namespace Microsoft.Fx.Portability
                 if (string.Equals(Json, result.Format, StringComparison.OrdinalIgnoreCase))
                 {
                     response = result.Data?.Deserialize<AnalyzeResponse>();
+
+                    // let's check which ones are actually missing from the list of typeref.
+                    using (FileStream fs = new FileStream(options.OutputFileName + ".callmap.csv", FileMode.Create))
+                    using (StreamWriter sw = new StreamWriter(fs))
+                    {
+                        sw.WriteLine("Called type, Called from");
+                        foreach (var typeRef in dependencyInfo.CallMap.Keys)
+                        {
+                            MemberInfo missingType = response.MissingDependencies.FirstOrDefault(x => StringComparer.OrdinalIgnoreCase.Equals(typeRef, x.TypeDocId));
+                            if (missingType != null)
+                            {
+                                foreach (var caller in dependencyInfo.CallMap[typeRef])
+                                {
+                                    sw.WriteLine($"{typeRef},{caller}");
+                                }
+                            }
+                        }
+                    }
 
                     if (jsonAdded)
                     {
@@ -208,10 +232,8 @@ namespace Microsoft.Fx.Portability
         /// </summary>
         /// <param name="options">Options to generate report</param>
         /// <returns>A collection of reports</returns>
-        private async Task<MultipleFormatAnalysis> GetAnalysisResultAsync(IApiPortOptions options)
+        private async Task<MultipleFormatAnalysis> GetAnalysisResultAsync(IDependencyInfo dependencyInfo, IApiPortOptions options)
         {
-            var dependencyInfo = _dependencyFinder.FindDependencies(options.InputAssemblies, _progressReport);
-
             if (dependencyInfo.UserAssemblies.Any())
             {
                 AnalyzeRequest request = GenerateRequest(options, dependencyInfo);
@@ -301,6 +323,17 @@ namespace Microsoft.Fx.Portability
 
             return GetReportingResult(request, fullResponse.Response, dependencyInfo);
         }
+
+        public static JsonSerializerSettings JsonSettings { get; } = new JsonSerializerSettings
+        {
+            Formatting = Formatting.Indented,
+            Converters = new JsonConverter[]
+    {
+                new JsonMultiDictionaryConverter<MemberInfo, AssemblyInfo>(),
+                new JsonToStringConverter<FrameworkName>(s => new FrameworkName(s)),
+                new JsonToStringConverter<Version>(s => new Version(s)),
+    }
+        };
 
         private ReportingResult GetReportingResult(AnalyzeRequest request, AnalyzeResponse response, IDependencyInfo dependencyInfo)
         {

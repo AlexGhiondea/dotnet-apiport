@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -51,6 +52,14 @@ namespace Microsoft.Fx.Portability.Analyzer
         public IEnumerable<AssemblyInfo> UserAssemblies
         {
             get { return _userAssemblies; }
+        }
+
+        public IDictionary<string, ICollection<string>> CallMap
+        {
+            get
+            {
+                throw new NotImplementedException();
+            }
         }
 
         private void FindDependencies(IProgressTask progressTask)

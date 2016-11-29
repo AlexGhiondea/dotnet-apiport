@@ -7,6 +7,7 @@ using Microsoft.Fx.Portability.ObjectModel;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System;
 
 namespace ApiPort
 {
@@ -32,6 +33,14 @@ namespace ApiPort
             public IEnumerable<string> AssembliesWithErrors
             {
                 get { return Enumerable.Empty<string>(); }
+            }
+
+            public IDictionary<string, ICollection<string>> CallMap
+            {
+                get
+                {
+                    return new Dictionary<string, ICollection<string>>();
+                }
             }
 
             public IDictionary<MemberInfo, ICollection<AssemblyInfo>> Dependencies
