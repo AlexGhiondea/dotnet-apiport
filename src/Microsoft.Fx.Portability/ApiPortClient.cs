@@ -6,6 +6,7 @@ using Microsoft.Fx.Portability.ObjectModel;
 using Microsoft.Fx.Portability.Reporting;
 using Microsoft.Fx.Portability.Reporting.ObjectModel;
 using Microsoft.Fx.Portability.Resources;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -215,6 +216,16 @@ namespace Microsoft.Fx.Portability
             if (dependencyInfo.UserAssemblies.Any())
             {
                 AnalyzeRequest request = GenerateRequest(options, dependencyInfo);
+
+                //Write the payload to disk
+
+                using (FileStream fs = File.OpenWrite(options.OutputFileName + ".requestPayload.json"))
+                using (StreamWriter sw = new StreamWriter(fs))
+                using (JsonWriter jw = new JsonTextWriter(sw))
+                {
+                    var serializer = JsonSerializer.Create();
+                    serializer.Serialize(jw, request);
+                }
 
                 // Create the progress reporter here (instead of within GetResultFromServiceAsync) since the reporter does not work well when run in parallel
                 using (var progressTask = _progressReport.StartTask(LocalizedStrings.AnalyzingCompatibility))
