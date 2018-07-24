@@ -2,7 +2,7 @@
   "profiles": {
     "ApiPort": {
       "commandName": "Project",
-      "commandLineArgs": "listTargets"
+      "commandLineArgs": "analyze -f \"E:\\repos\\corefx\\Tools\\GenFacades.exe\" -r \"dgml\" -o \"C:\\Users\\safern\\Desktop\\test.dgml\""
     }
   }
 }
