@@ -16,9 +16,9 @@ namespace Microsoft.Fx.Portability.Reports.DGML
     {
         public ResultFormatInformation Format => new ResultFormatInformation()
         {
-            DisplayName="DGML",
-            MimeType="application/xml",
-            FileExtension=".dgml"
+            DisplayName = "DGML",
+            MimeType = "application/xml",
+            FileExtension = ".dgml"
         };
 
         public void WriteStream(Stream stream, AnalyzeResponse response, AnalyzeRequest request)
@@ -28,23 +28,65 @@ namespace Microsoft.Fx.Portability.Reports.DGML
             root.SetAttributeValue("Title", request.ApplicationName);
 
             XElement nodes = root.Element(_nameSpace + "Nodes");
+            XElement links = root.Element(_nameSpace + "Links");
 
             ReportingResult analysisResult = response.ReportingResult;
 
             if (analysisResult.GetAssemblyUsageInfo().Any())
             {
-                _assemblyNodes = new Dictionary<string, Guid>();
-
-                foreach (var item in analysisResult.GetAssemblyUsageInfo().OrderBy(a => a.SourceAssembly.AssemblyIdentity))
+                var targets = analysisResult.Targets;
+                for (int i = 0; i < targets.Count; i++)
                 {
-                    string assemblyName = analysisResult.GetNameForAssemblyInfo(item.SourceAssembly);
-                    Guid nodeGuid = GetOrCreateGuid(item.SourceAssembly.GetFullAssemblyIdentity());
-                    var portabilityIndex = item.UsageData.Select(pui => (object)(Math.Round(pui.PortabilityIndex * 100.0, 2))).FirstOrDefault();
+                    string target = targets[i].FullName;
+                    Guid nodeGuid = Guid.NewGuid();
+                    _nodesDictionary.Add(target, nodeGuid);
                     nodes.Add(new XElement(_nameSpace + "Node",
                         new XAttribute("Id", nodeGuid),
-                        new XAttribute("Label", $"{assemblyName} {portabilityIndex}%"),
-                        new XAttribute("Category", GetCategory((double)portabilityIndex)),
-                        new XAttribute("PortabilityIndex", $"{portabilityIndex}%")));
+                        new XAttribute("Label", target),
+                        new XAttribute("Category", "Target"),
+                        new XAttribute("Group", "Collapsed")));
+                }
+
+                List<AssemblyUsageInfo> assemblyUsageInfo = analysisResult.GetAssemblyUsageInfo().OrderBy(a => a.SourceAssembly.AssemblyIdentity).ToList();
+                IDictionary<string, ICollection<string>> unresolvedAssemblies = analysisResult.GetUnresolvedAssemblies();
+                foreach (var item in assemblyUsageInfo)
+                {
+                    string assemblyName = analysisResult.GetNameForAssemblyInfo(item.SourceAssembly);
+                    for (int i = 0; i < item.UsageData.Count; i++)
+                    {
+                        TargetUsageInfo usageInfo = item.UsageData[i];
+                        var portabilityIndex = Math.Round(usageInfo.PortabilityIndex * 100.0, 2);
+                        string framework = targets[i].FullName;
+                        Guid nodeGuid = GetOrCreateGuid($"{item.SourceAssembly.GetFullAssemblyIdentity()},TFM:{framework}");
+
+                        nodes.Add(new XElement(_nameSpace + "Node",
+                            new XAttribute("Id", nodeGuid),
+                            new XAttribute("Label", $"{assemblyName} {portabilityIndex}%"),
+                            new XAttribute("Category", GetCategory(portabilityIndex)),
+                            new XAttribute("PortabilityIndex", $"{portabilityIndex}%")));
+
+                        if (_nodesDictionary.TryGetValue(framework, out Guid frameworkGuid))
+                        {
+                            links.Add(new XElement(_nameSpace + "Link",
+                                new XAttribute("Source", frameworkGuid),
+                                new XAttribute("Target", nodeGuid),
+                                new XAttribute("Category", "Contains")));
+                        }
+                    }
+
+                    IList<AssemblyReferenceInformation> references = item.SourceAssembly.AssemblyReferences;
+                    for (int i = 0; i < targets.Count; i++)
+                    {
+                        string framework = targets[i].FullName;
+                        for (int j = 0; j < references.Count; j++)
+                        {
+                            var reference = references[j].ToString();
+                            if (unresolvedAssemblies.TryGetValue(reference, out var _))
+                            {
+                                _nodesDictionary.Add(reference, Guid.NewGuid());
+                            }
+                        }
+                    }
                 }
             }
 
@@ -56,15 +98,15 @@ namespace Microsoft.Fx.Portability.Reports.DGML
             }
         }
 
-        private Guid GetOrCreateGuid(string assembly)
+        private Guid GetOrCreateGuid(string nodeLabel)
         {
-            if (!_assemblyNodes.TryGetValue(assembly, out Guid result))
+            if (!_nodesDictionary.TryGetValue(nodeLabel, out Guid guid))
             {
-                result = Guid.NewGuid();
-                _assemblyNodes.Add(assembly, result);
+                guid = Guid.NewGuid();
+                _nodesDictionary.Add(nodeLabel, guid);
             }
 
-            return result;
+            return guid;
         }
 
         private static string GetCategory(double probabilityIndex)
@@ -81,7 +123,9 @@ namespace Microsoft.Fx.Portability.Reports.DGML
             return "Low";
         }
 
-        private Dictionary<string, Guid> _assemblyNodes;
+        private readonly List<Tuple<Guid, Guid>> _references = new List<Tuple<Guid, Guid>>();
+
+        private readonly Dictionary<string, Guid> _nodesDictionary = new Dictionary<string, Guid>();
 
         private readonly XNamespace _nameSpace = "http://schemas.microsoft.com/vs/2009/dgml";
 
@@ -98,9 +142,11 @@ namespace Microsoft.Fx.Portability.Reports.DGML
                 <Category Id=""Medium"" Background=""#ff9900"" />
                 <Category Id=""MediumLow"" Background=""#ff3300"" />
                 <Category Id=""Low"" Background=""#990000"" />
+                <Category Id=""Target"" Background=""white"" />
+                <Category Id=""Missing"" Background=""white"" />
             </Categories>
             <Properties>
-                <Property Id=""PortabilityIndex"" Label=""Portability Index"" DataType=""System.Double"" />
+                <Property Id=""PortabilityIndex"" Label=""Portability Index"" DataType=""System.String"" />
             </Properties>
             </DirectedGraph>";
 
