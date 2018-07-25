@@ -27,8 +27,8 @@ namespace Microsoft.Fx.Portability.Reports.DGML
             XElement root = file.Root;
             root.SetAttributeValue("Title", request.ApplicationName);
 
-            XElement nodes = root.Element(_nameSpace + "Nodes");
-            XElement links = root.Element(_nameSpace + "Links");
+            nodes = root.Element(_nameSpace + "Nodes");
+            links = root.Element(_nameSpace + "Links");
 
             ReportingResult analysisResult = response.ReportingResult;
 
@@ -37,14 +37,10 @@ namespace Microsoft.Fx.Portability.Reports.DGML
                 var targets = analysisResult.Targets;
                 for (int i = 0; i < targets.Count; i++)
                 {
-                    string target = targets[i].FullName;
+                    string targetFramework = targets[i].FullName;
                     Guid nodeGuid = Guid.NewGuid();
-                    _nodesDictionary.Add(target, nodeGuid);
-                    nodes.Add(new XElement(_nameSpace + "Node",
-                        new XAttribute("Id", nodeGuid),
-                        new XAttribute("Label", target),
-                        new XAttribute("Category", "Target"),
-                        new XAttribute("Group", "Collapsed")));
+                    _nodesDictionary.Add(targetFramework, nodeGuid);
+                    AddNode(nodeGuid, targetFramework, "Target", group: "Expanded");
                 }
 
                 List<AssemblyUsageInfo> assemblyUsageInfo = analysisResult.GetAssemblyUsageInfo().OrderBy(a => a.SourceAssembly.AssemblyIdentity).ToList();
@@ -57,20 +53,13 @@ namespace Microsoft.Fx.Portability.Reports.DGML
                         TargetUsageInfo usageInfo = item.UsageData[i];
                         var portabilityIndex = Math.Round(usageInfo.PortabilityIndex * 100.0, 2);
                         string framework = targets[i].FullName;
-                        Guid nodeGuid = GetOrCreateGuid($"{item.SourceAssembly.GetFullAssemblyIdentity()},TFM:{framework}");
+                        GetOrCreateGuid($"{assemblyName},TFM:{framework}", out Guid nodeGuid);
 
-                        nodes.Add(new XElement(_nameSpace + "Node",
-                            new XAttribute("Id", nodeGuid),
-                            new XAttribute("Label", $"{assemblyName} {portabilityIndex}%"),
-                            new XAttribute("Category", GetCategory(portabilityIndex)),
-                            new XAttribute("PortabilityIndex", $"{portabilityIndex}%")));
+                        AddNode(nodeGuid, $"{assemblyName} {portabilityIndex}%", GetCategory(portabilityIndex), $"{portabilityIndex}%");
 
                         if (_nodesDictionary.TryGetValue(framework, out Guid frameworkGuid))
                         {
-                            links.Add(new XElement(_nameSpace + "Link",
-                                new XAttribute("Source", frameworkGuid),
-                                new XAttribute("Target", nodeGuid),
-                                new XAttribute("Category", "Contains")));
+                            AddLink(frameworkGuid, nodeGuid, "Contains");
                         }
                     }
 
@@ -78,13 +67,33 @@ namespace Microsoft.Fx.Portability.Reports.DGML
                     for (int i = 0; i < targets.Count; i++)
                     {
                         string framework = targets[i].FullName;
+                        _nodesDictionary.TryGetValue($"{assemblyName},TFM:{framework}", out Guid myGuid);
                         for (int j = 0; j < references.Count; j++)
                         {
-                            var reference = references[j].ToString();
-                            if (unresolvedAssemblies.TryGetValue(reference, out var _))
+                            AssemblyReferenceInformation reference = references[j];
+                            bool isUnResolvedAssembly = unresolvedAssemblies.TryGetValue(reference.Name, out var _);
+                            bool isResolvedAssembly = assemblyUsageInfo.Exists(aui => analysisResult.GetNameForAssemblyInfo(aui.SourceAssembly) == reference.Name);
+
+                            if (!(isUnResolvedAssembly || isResolvedAssembly))
                             {
-                                _nodesDictionary.Add(reference, Guid.NewGuid());
+                                continue;
                             }
+
+                            bool nodeExists = GetOrCreateGuid($"{reference.Name},TFM:{framework}", out Guid referenceGuid);
+                            if (isUnResolvedAssembly)
+                            {
+                                if (!nodeExists)
+                                {
+                                    AddNode(referenceGuid, $"Unresolved: {reference.Name}", "Unresolved");
+
+                                    if (_nodesDictionary.TryGetValue(framework, out Guid frameworkGuid))
+                                    {
+                                        AddLink(frameworkGuid, referenceGuid, "Contains");
+                                    }
+                                }
+                            }
+
+                            AddLink(myGuid, referenceGuid);
                         }
                     }
                 }
@@ -98,15 +107,16 @@ namespace Microsoft.Fx.Portability.Reports.DGML
             }
         }
 
-        private Guid GetOrCreateGuid(string nodeLabel)
+        private bool GetOrCreateGuid(string nodeLabel, out Guid guid)
         {
-            if (!_nodesDictionary.TryGetValue(nodeLabel, out Guid guid))
+            if (!_nodesDictionary.TryGetValue(nodeLabel, out guid))
             {
                 guid = Guid.NewGuid();
                 _nodesDictionary.Add(nodeLabel, guid);
+                return false;
             }
 
-            return guid;
+            return true;
         }
 
         private static string GetCategory(double probabilityIndex)
@@ -123,7 +133,36 @@ namespace Microsoft.Fx.Portability.Reports.DGML
             return "Low";
         }
 
-        private readonly List<Tuple<Guid, Guid>> _references = new List<Tuple<Guid, Guid>>();
+        private void AddLink(Guid source, Guid target, string category = null)
+        {
+            var element = new XElement(_nameSpace + "Link",
+                new XAttribute("Source", source),
+                new XAttribute("Target", target));
+
+            if (category != null)
+                element.SetAttributeValue("Category", category);
+
+            links.Add(element);
+        }
+
+        private void AddNode(Guid id, string label, string category, string portabilityIndex = null, string group = null)
+        {
+            var element = new XElement(_nameSpace + "Node",
+                new XAttribute("Id", id),
+                new XAttribute("Label", label),
+                new XAttribute("Category", category));
+
+            if (portabilityIndex != null)
+                element.SetAttributeValue("PortabilityIndex", portabilityIndex);
+            if (group != null)
+                element.SetAttributeValue("Group", group);
+
+            nodes.Add(element);
+        }
+
+        private XElement nodes;
+
+        private XElement links;
 
         private readonly Dictionary<string, Guid> _nodesDictionary = new Dictionary<string, Guid>();
 
@@ -143,7 +182,7 @@ namespace Microsoft.Fx.Portability.Reports.DGML
                 <Category Id=""MediumLow"" Background=""#ff3300"" />
                 <Category Id=""Low"" Background=""#990000"" />
                 <Category Id=""Target"" Background=""white"" />
-                <Category Id=""Missing"" Background=""white"" />
+                <Category Id=""Unresolved"" Background=""red"" />
             </Categories>
             <Properties>
                 <Property Id=""PortabilityIndex"" Label=""Portability Index"" DataType=""System.String"" />
