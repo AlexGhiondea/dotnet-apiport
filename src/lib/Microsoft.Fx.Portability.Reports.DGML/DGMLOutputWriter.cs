@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Xml.Linq;
 
 namespace Microsoft.Fx.Portability.Reports.DGML
@@ -48,18 +49,36 @@ namespace Microsoft.Fx.Portability.Reports.DGML
                 foreach (var item in assemblyUsageInfo)
                 {
                     string assemblyName = analysisResult.GetNameForAssemblyInfo(item.SourceAssembly);
+                    IEnumerable<MissingTypeInfo> missingTypesForAssembly = analysisResult.GetMissingTypes().Where(mt => mt.UsedIn.Contains(item.SourceAssembly) && mt.IsMissing);
                     for (int i = 0; i < item.UsageData.Count; i++)
                     {
                         TargetUsageInfo usageInfo = item.UsageData[i];
                         var portabilityIndex = Math.Round(usageInfo.PortabilityIndex * 100.0, 2);
                         string framework = targets[i].FullName;
-                        GetOrCreateGuid($"{assemblyName},TFM:{framework}", out Guid nodeGuid);
+                        var missingTypesForFramework = missingTypesForAssembly.Where(mt => mt.TargetStatus.ToList()[i] == "Not supported" || (mt.TargetVersionStatus.ToList()[i] > targets[i].Version)).ToList();
 
-                        AddNode(nodeGuid, $"{assemblyName} {portabilityIndex}%", GetCategory(portabilityIndex), $"{portabilityIndex}%");
+                        GetOrCreateGuid($"{assemblyName},TFM:{framework}", out Guid nodeGuid);
+                        AddNode(nodeGuid, $"{assemblyName} {portabilityIndex}%", GetCategory(portabilityIndex), $"{portabilityIndex}%", missingTypesForFramework.Count > 0 ? "Collapsed" : null);
 
                         if (_nodesDictionary.TryGetValue(framework, out Guid frameworkGuid))
                         {
                             AddLink(frameworkGuid, nodeGuid, "Contains");
+                        }
+
+                        StringBuilder sb = new StringBuilder();
+                        for (int j = 0; j < missingTypesForFramework.Count; j++)
+                        {
+                            if (j > 0)
+                                sb.Append("\n");
+
+                            sb.Append(missingTypesForFramework[j].DocId);
+                        }
+
+                        if (sb.Length > 0)
+                        {
+                            Guid commentGuid = Guid.NewGuid();
+                            AddNode(commentGuid, sb.ToString(), "Comment");
+                            AddLink(nodeGuid, commentGuid, "Contains");
                         }
                     }
 
@@ -121,7 +140,7 @@ namespace Microsoft.Fx.Portability.Reports.DGML
 
         private static string GetCategory(double probabilityIndex)
         {
-            if (probabilityIndex >= 90.0)
+            if (probabilityIndex == 100.0)
                 return "VeryHigh";
             if (probabilityIndex >= 75.0)
                 return "High";
@@ -170,7 +189,7 @@ namespace Microsoft.Fx.Portability.Reports.DGML
 
         private readonly string _template =
             @"<?xml version=""1.0"" encoding=""utf-8""?>
-            <DirectedGraph xmlns=""http://schemas.microsoft.com/vs/2009/dgml"">
+            <DirectedGraph xmlns=""http://schemas.microsoft.com/vs/2009/dgml"" Background=""grey"">
             <Nodes>
             </Nodes>
             <Links>
@@ -183,10 +202,21 @@ namespace Microsoft.Fx.Portability.Reports.DGML
                 <Category Id=""Low"" Background=""#990000"" />
                 <Category Id=""Target"" Background=""white"" />
                 <Category Id=""Unresolved"" Background=""red"" />
+                <Category Id=""Comment"" Label=""Comment"" Description=""Represents a user defined comment on the diagram"" NavigationActionLabel=""Comments"" />
             </Categories>
             <Properties>
                 <Property Id=""PortabilityIndex"" Label=""Portability Index"" DataType=""System.String"" />
             </Properties>
+            <Styles>
+                <Style TargetType=""Node"" GroupLabel=""Comment"" ValueLabel=""Has comment"">
+                  <Condition Expression = ""HasCategory('Comment')"" />
+                  <Setter Property=""Background"" Value=""#FFFFFACD"" />
+                  <Setter Property=""Stroke"" Value=""#FFE5C365"" />
+                  <Setter Property=""StrokeThickness"" Value=""1"" />
+                  <Setter Property=""NodeRadius"" Value=""2"" />
+                  <Setter Property=""MaxWidth"" Value=""250"" />
+                </Style>
+              </Styles>W
             </DirectedGraph>";
 
     }
