@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Xml.Linq;
 
@@ -22,98 +23,76 @@ namespace Microsoft.Fx.Portability.Reports.DGML
             FileExtension = ".dgml"
         };
 
-        public void WriteStream(Stream stream, AnalyzeResponse response, AnalyzeRequest request)
+        XDocument file;
+
+        public DGMLOutputWriter()
         {
-            XDocument file = XDocument.Parse(_template);
+            file = XDocument.Parse(_template);
             XElement root = file.Root;
-            root.SetAttributeValue("Title", request.ApplicationName);
+            //TODO: root.SetAttributeValue("Title", request.ApplicationName);
 
             nodes = root.Element(_nameSpace + "Nodes");
             links = root.Element(_nameSpace + "Links");
+        }
+
+        public void WriteStream(Stream stream, AnalyzeResponse response, AnalyzeRequest request)
+        {
+            ReferenceGraph rg = CreateGraphFromResponse(response, request);
 
             ReportingResult analysisResult = response.ReportingResult;
+            var targets = analysisResult.Targets;
+            GenerateTargetContainers(targets);
 
-            if (analysisResult.GetAssemblyUsageInfo().Any())
+            //for each target, let's generate the assemblies
+            foreach (var node in rg.Nodes.Keys)
             {
-                var targets = analysisResult.Targets;
                 for (int i = 0; i < targets.Count; i++)
                 {
-                    string targetFramework = targets[i].FullName;
-                    Guid nodeGuid = Guid.NewGuid();
-                    _nodesDictionary.Add(targetFramework, nodeGuid);
-                    AddNode(nodeGuid, targetFramework, "Target", group: "Expanded");
-                }
-
-                List<AssemblyUsageInfo> assemblyUsageInfo = analysisResult.GetAssemblyUsageInfo().OrderBy(a => a.SourceAssembly.AssemblyIdentity).ToList();
-                IDictionary<string, ICollection<string>> unresolvedAssemblies = analysisResult.GetUnresolvedAssemblies();
-                foreach (var item in assemblyUsageInfo)
-                {
-                    string assemblyName = analysisResult.GetNameForAssemblyInfo(item.SourceAssembly);
-                    IEnumerable<MissingTypeInfo> missingTypesForAssembly = analysisResult.GetMissingTypes().Where(mt => mt.UsedIn.Contains(item.SourceAssembly) && mt.IsMissing);
-                    for (int i = 0; i < item.UsageData.Count; i++)
+                    double portabilityIndex = 0;
+                    string missingTypes = null;
+                    if (node.UsageData != null)
                     {
-                        TargetUsageInfo usageInfo = item.UsageData[i];
-                        var portabilityIndex = Math.Round(usageInfo.PortabilityIndex * 100.0, 2);
-                        string framework = targets[i].FullName;
-                        var missingTypesForFramework = missingTypesForAssembly.Where(mt => mt.TargetStatus.ToList()[i] == "Not supported" || (mt.TargetVersionStatus.ToList()[i] > targets[i].Version)).ToList();
+                        TargetUsageInfo usageInfo = node.UsageData[i];
+                        portabilityIndex = Math.Round(usageInfo.PortabilityIndex * 100.0, 2);
 
-                        GetOrCreateGuid($"{assemblyName},TFM:{framework}", out Guid nodeGuid);
-                        AddNode(nodeGuid, $"{assemblyName} {portabilityIndex}%", GetCategory(portabilityIndex), $"{portabilityIndex}%", missingTypesForFramework.Count > 0 ? "Collapsed" : null);
-
-                        if (_nodesDictionary.TryGetValue(framework, out Guid frameworkGuid))
-                        {
-                            AddLink(frameworkGuid, nodeGuid, "Contains");
-                        }
-
-                        StringBuilder sb = new StringBuilder();
-                        for (int j = 0; j < missingTypesForFramework.Count; j++)
-                        {
-                            if (j > 0)
-                                sb.Append("\n");
-
-                            sb.Append(missingTypesForFramework[j].DocId);
-                        }
-
-                        if (sb.Length > 0)
-                        {
-                            Guid commentGuid = Guid.NewGuid();
-                            AddNode(commentGuid, sb.ToString(), "Comment");
-                            AddLink(nodeGuid, commentGuid, "Contains");
-                        }
+                        missingTypes = GenerateMissingTypes(node.Assembly, analysisResult, i);
                     }
 
-                    IList<AssemblyReferenceInformation> references = item.SourceAssembly.AssemblyReferences;
-                    for (int i = 0; i < targets.Count; i++)
+                    // generate the node
+                    string tfm = targets[i].FullName;
+                    GetOrCreateGuid($"{node.Assembly},TFM:{tfm}", out Guid nodeGuid);
+
+                    AddNode(nodeGuid, $"{node.SimpleName}, {portabilityIndex}%", node.IsMissing ? "Unresolved" : GetCategory(portabilityIndex), portabilityIndex.ToString(), group: missingTypes.Length == 0 ? null : "Collapsed");
+
+                    if (_nodesDictionary.TryGetValue(tfm, out Guid frameworkGuid))
                     {
-                        string framework = targets[i].FullName;
-                        _nodesDictionary.TryGetValue($"{assemblyName},TFM:{framework}", out Guid myGuid);
-                        for (int j = 0; j < references.Count; j++)
-                        {
-                            AssemblyReferenceInformation reference = references[j];
-                            bool isUnResolvedAssembly = unresolvedAssemblies.TryGetValue(reference.Name, out var _);
-                            bool isResolvedAssembly = assemblyUsageInfo.Exists(aui => analysisResult.GetNameForAssemblyInfo(aui.SourceAssembly) == reference.Name);
+                        AddLink(frameworkGuid, nodeGuid, "Contains");
+                    }
 
-                            if (!(isUnResolvedAssembly || isResolvedAssembly))
-                            {
-                                continue;
-                            }
 
-                            bool nodeExists = GetOrCreateGuid($"{reference.Name},TFM:{framework}", out Guid referenceGuid);
-                            if (isUnResolvedAssembly)
-                            {
-                                if (!nodeExists)
-                                {
-                                    AddNode(referenceGuid, $"Unresolved: {reference.Name}", "Unresolved");
+                    if (!string.IsNullOrEmpty(missingTypes))
+                    {
+                        Guid commentGuid = Guid.NewGuid();
+                        AddNode(commentGuid, missingTypes, "Comment");
+                        AddLink(nodeGuid, commentGuid, "Contains");
+                    }
+                }
+            }
 
-                                    if (_nodesDictionary.TryGetValue(framework, out Guid frameworkGuid))
-                                    {
-                                        AddLink(frameworkGuid, referenceGuid, "Contains");
-                                    }
-                                }
-                            }
+            // generate the references.
+            foreach (var node in rg.Nodes.Keys)
+            {
+                for (int i = 0; i < targets.Count; i++)
+                {
+                    // generate the node
+                    string tfm = targets[i].FullName;
+                    GetOrCreateGuid($"{node.Assembly},TFM:{tfm}", out Guid nodeGuid);
 
-                            AddLink(myGuid, referenceGuid);
-                        }
+                    foreach (var refNode in node.Nodes)
+                    {
+                        GetOrCreateGuid($"{refNode.Assembly},TFM:{tfm}", out Guid refNodeGuid);
+
+                        AddLink(nodeGuid, refNodeGuid);
                     }
                 }
             }
@@ -123,7 +102,74 @@ namespace Microsoft.Fx.Portability.Reports.DGML
                 file.Save(ms);
                 ms.Position = 0;
                 ms.CopyTo(stream);
+            };
+
+            return;
+        }
+
+        private string GenerateMissingTypes(string assembly, ReportingResult response, int i)
+        {
+            // for a given assembly identity and a given target usage, display the missing types
+            //TODO: this is very allocation heavy.
+            IEnumerable<MissingTypeInfo> missingTypesForAssembly = response.GetMissingTypes().Where(mt => mt.UsedIn.Any(x => x.AssemblyIdentity == assembly) && mt.IsMissing);
+            var missingTypesForFramework = missingTypesForAssembly.Where(mt => mt.TargetStatus.ToList()[i] == "Not supported" || (mt.TargetVersionStatus.ToList()[i] > response.Targets[i].Version)).Select(x => x.DocId).OrderBy(x => x);
+
+            return string.Join("\n", missingTypesForFramework);
+        }
+
+        private void GenerateTargetContainers(IList<System.Runtime.Versioning.FrameworkName> targets)
+        {
+            for (int i = 0; i < targets.Count; i++)
+            {
+                string targetFramework = targets[i].FullName;
+                Guid nodeGuid = Guid.NewGuid();
+                _nodesDictionary.Add(targetFramework, nodeGuid);
+                AddNode(nodeGuid, targetFramework, "Target", group: "Expanded");
             }
+        }
+
+        private ReferenceGraph CreateGraphFromResponse(AnalyzeResponse response, AnalyzeRequest request)
+        {
+            ReferenceGraph rg = new ReferenceGraph();
+
+            // get the list of assemblies that have some data reported for them.
+            var assembliesWithData = response.ReportingResult.GetAssemblyUsageInfo().ToDictionary(x => x.SourceAssembly.AssemblyIdentity, x => x.UsageData);
+
+            var unresolvedAssemblies = response.ReportingResult.GetUnresolvedAssemblies().Select(x => x.Key).ToList();
+
+            // Add every user specified assembly to the graph
+            foreach (var userAsem in request.UserAssemblies)
+            {
+                var node = rg.GetOrAddNodeForAssembly(new ReferenceNode(userAsem.AssemblyIdentity));
+
+                //for this node, make sure we capture the data, if we have it.
+                if (assembliesWithData.ContainsKey(node.Assembly))
+                {
+                    node.UsageData = assembliesWithData[node.Assembly];
+                }
+
+                // create nodes for all the references, if non platform.
+                foreach (var reference in userAsem.AssemblyReferences)
+                {
+                    if (!(assembliesWithData.ContainsKey(reference.ToString()) || unresolvedAssemblies.Contains(reference.ToString())))
+                    {
+                        // platform reference (not in the user specified asssemblies and not an unresolved assembly.
+                        continue;
+                    }
+
+                    var refNode = rg.GetOrAddNodeForAssembly(new ReferenceNode(reference.ToString()));
+
+                    // if the reference is missing, flag it as such.
+                    if (unresolvedAssemblies.Contains(reference.ToString()))
+                    {
+                        refNode.IsMissing = true;
+                    }
+
+                    node.AddReferenceToNode(refNode);
+                }
+            }
+
+            return rg;
         }
 
         private bool GetOrCreateGuid(string nodeLabel, out Guid guid)
