@@ -90,7 +90,12 @@ namespace Microsoft.Fx.Portability.Reports.DGML
             links.Add(element);
         }
 
-        internal void AddNode(Guid id, string label, string category, string portabilityIndex = null, string group = null)
+        internal void AddNode(Guid commentGuid, string missingTypes, string category)
+        {
+            AddNode(commentGuid, missingTypes, category, null, null);
+        }
+
+        internal void AddNode(Guid id, string label, string category, double? portabilityIndex, string group)
         {
             var element = new XElement(_nameSpace + "Node",
                 new XAttribute("Id", id),

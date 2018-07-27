@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.Versioning;
 using System.Text;
 using System.Xml.Linq;
 
@@ -55,14 +56,13 @@ namespace Microsoft.Fx.Portability.Reports.DGML
 
                     dgml.AddNode(nodeGuid, $"{node.SimpleName}, {portabilityIndex}%",
                         node.IsMissing ? "Unresolved" : GetCategory(portabilityIndex),
-                        portabilityIndex.ToString(),
+                        portabilityIndex,
                         group: missingTypes.Length == 0 ? null : "Collapsed");
 
                     if (dgml.TryGetId(tfm, out Guid frameworkGuid))
                     {
                         dgml.AddLink(frameworkGuid, nodeGuid, "Contains");
                     }
-
 
                     if (!string.IsNullOrEmpty(missingTypes))
                     {
@@ -96,7 +96,7 @@ namespace Microsoft.Fx.Portability.Reports.DGML
             return;
         }
 
-        private string GenerateMissingTypes(string assembly, ReportingResult response, int i)
+        private static string GenerateMissingTypes(string assembly, ReportingResult response, int i)
         {
             // for a given assembly identity and a given target usage, display the missing types
             //TODO: this is very allocation heavy.
@@ -106,14 +106,14 @@ namespace Microsoft.Fx.Portability.Reports.DGML
             return string.Join("\n", missingTypesForFramework);
         }
 
-        private void GenerateTargetContainers(IList<System.Runtime.Versioning.FrameworkName> targets)
+        private void GenerateTargetContainers(IList<FrameworkName> targets)
         {
             for (int i = 0; i < targets.Count; i++)
             {
                 string targetFramework = targets[i].FullName;
                 Guid nodeGuid = Guid.NewGuid();
                 dgml.AddId(targetFramework, nodeGuid);
-                dgml.AddNode(nodeGuid, targetFramework, "Target", group: "Expanded");
+                dgml.AddNode(nodeGuid, targetFramework, "Target", null, group: "Expanded");
             }
         }
 
@@ -130,10 +130,5 @@ namespace Microsoft.Fx.Portability.Reports.DGML
 
             return "Low";
         }
-
-
-
-
-
     }
 }
