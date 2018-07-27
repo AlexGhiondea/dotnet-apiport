@@ -1,4 +1,7 @@
-﻿using System;
+﻿// Copyright (c) Microsoft. All rights reserved.
+// Licensed under the MIT license. See LICENSE file in the project root for full license information.
+
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -51,7 +54,6 @@ namespace Microsoft.Fx.Portability.Reports.DGML
               </Styles>W
             </DirectedGraph>";
         #endregion
-
 
         XDocument file;
         public DGMLManager()
@@ -117,8 +119,7 @@ namespace Microsoft.Fx.Portability.Reports.DGML
 
         internal Guid GetOrCreateGuid(string nodeLabel)
         {
-            Guid guid;
-            if (!_nodesDictionary.TryGetValue(nodeLabel, out guid))
+            if (!_nodesDictionary.TryGetValue(nodeLabel, out Guid guid))
             {
                 guid = Guid.NewGuid();
                 _nodesDictionary.Add(nodeLabel, guid);
