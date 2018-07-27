@@ -37,7 +37,7 @@ namespace Microsoft.Fx.Portability.Reports.DGML
 
         public void WriteStream(Stream stream, AnalyzeResponse response, AnalyzeRequest request)
         {
-            ReferenceGraph rg = CreateGraphFromResponse(response, request);
+            ReferenceGraph rg = ReferenceGraph.CreateGraph(response, request);
 
             ReportingResult analysisResult = response.ReportingResult;
             var targets = analysisResult.Targets;
@@ -126,50 +126,6 @@ namespace Microsoft.Fx.Portability.Reports.DGML
                 _nodesDictionary.Add(targetFramework, nodeGuid);
                 AddNode(nodeGuid, targetFramework, "Target", group: "Expanded");
             }
-        }
-
-        private ReferenceGraph CreateGraphFromResponse(AnalyzeResponse response, AnalyzeRequest request)
-        {
-            ReferenceGraph rg = new ReferenceGraph();
-
-            // get the list of assemblies that have some data reported for them.
-            var assembliesWithData = response.ReportingResult.GetAssemblyUsageInfo().ToDictionary(x => x.SourceAssembly.AssemblyIdentity, x => x.UsageData);
-
-            var unresolvedAssemblies = response.ReportingResult.GetUnresolvedAssemblies().Select(x => x.Key).ToList();
-
-            // Add every user specified assembly to the graph
-            foreach (var userAsem in request.UserAssemblies)
-            {
-                var node = rg.GetOrAddNodeForAssembly(new ReferenceNode(userAsem.AssemblyIdentity));
-
-                //for this node, make sure we capture the data, if we have it.
-                if (assembliesWithData.ContainsKey(node.Assembly))
-                {
-                    node.UsageData = assembliesWithData[node.Assembly];
-                }
-
-                // create nodes for all the references, if non platform.
-                foreach (var reference in userAsem.AssemblyReferences)
-                {
-                    if (!(assembliesWithData.ContainsKey(reference.ToString()) || unresolvedAssemblies.Contains(reference.ToString())))
-                    {
-                        // platform reference (not in the user specified asssemblies and not an unresolved assembly.
-                        continue;
-                    }
-
-                    var refNode = rg.GetOrAddNodeForAssembly(new ReferenceNode(reference.ToString()));
-
-                    // if the reference is missing, flag it as such.
-                    if (unresolvedAssemblies.Contains(reference.ToString()))
-                    {
-                        refNode.IsMissing = true;
-                    }
-
-                    node.AddReferenceToNode(refNode);
-                }
-            }
-
-            return rg;
         }
 
         private bool GetOrCreateGuid(string nodeLabel, out Guid guid)
