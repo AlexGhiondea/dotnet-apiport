@@ -73,11 +73,6 @@ namespace Microsoft.Fx.Portability.Reports.DGML
             return _nodesDictionary.TryGetValue(value, out frameworkGuid);
         }
 
-        internal void AddId(string value, Guid nodeGuid)
-        {
-            _nodesDictionary.Add(value, nodeGuid);
-        }
-
         internal void AddLink(Guid source, Guid target, string category = null)
         {
             var element = new XElement(_nameSpace + "Link",
@@ -120,16 +115,16 @@ namespace Microsoft.Fx.Portability.Reports.DGML
             };
         }
 
-        internal bool GetOrCreateGuid(string nodeLabel, out Guid guid)
+        internal Guid GetOrCreateGuid(string nodeLabel)
         {
+            Guid guid;
             if (!_nodesDictionary.TryGetValue(nodeLabel, out guid))
             {
                 guid = Guid.NewGuid();
                 _nodesDictionary.Add(nodeLabel, guid);
-                return false;
             }
 
-            return true;
+            return guid;
         }
     }
 }

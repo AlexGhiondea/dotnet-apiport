@@ -53,7 +53,7 @@ namespace Microsoft.Fx.Portability.Reports.DGML
 
                     // generate the node
                     string tfm = targets[i].FullName;
-                    dgml.GetOrCreateGuid($"{node.Assembly},TFM:{tfm}", out Guid nodeGuid);
+                    Guid nodeGuid = dgml.GetOrCreateGuid($"{node.Assembly},TFM:{tfm}");
                     string nodeTitle = $"{node.SimpleName}: {Math.Round(portabilityIndexRefs * 100, 2)}%";
                     string nodeCategory = node.IsMissing ? "Unresolved" : GetCategory(Math.Round(portabilityIndexRefs * 100, 2));
 
@@ -69,7 +69,6 @@ namespace Microsoft.Fx.Portability.Reports.DGML
 
                     if (!string.IsNullOrEmpty(missingTypes))
                     {
-
                         Guid commentGuid = Guid.NewGuid();
                         dgml.AddNode(commentGuid, missingTypes, "Comment");
                         dgml.AddLink(nodeGuid, commentGuid, "Contains");
@@ -84,12 +83,11 @@ namespace Microsoft.Fx.Portability.Reports.DGML
                 {
                     // generate the node
                     string tfm = targets[i].FullName;
-                    dgml.GetOrCreateGuid($"{node.Assembly},TFM:{tfm}", out Guid nodeGuid);
+                    Guid nodeGuid = dgml.GetOrCreateGuid($"{node.Assembly},TFM:{tfm}");
 
                     foreach (var refNode in node.Nodes)
                     {
-                        dgml.GetOrCreateGuid($"{refNode.Assembly},TFM:{tfm}", out Guid refNodeGuid);
-
+                        Guid refNodeGuid = dgml.GetOrCreateGuid($"{refNode.Assembly},TFM:{tfm}");
                         dgml.AddLink(nodeGuid, refNodeGuid);
                     }
                 }
@@ -115,8 +113,8 @@ namespace Microsoft.Fx.Portability.Reports.DGML
             for (int i = 0; i < targets.Count; i++)
             {
                 string targetFramework = targets[i].FullName;
-                Guid nodeGuid = Guid.NewGuid();
-                dgml.AddId(targetFramework, nodeGuid);
+                Guid nodeGuid = dgml.GetOrCreateGuid(targetFramework);// Guid.NewGuid();
+                //dgml.AddId(targetFramework, nodeGuid);
                 dgml.AddNode(nodeGuid, targetFramework, "Target", null, group: "Expanded");
             }
         }
