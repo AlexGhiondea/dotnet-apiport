@@ -2,6 +2,7 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 using Microsoft.Fx.Portability.Reporting.ObjectModel;
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 
@@ -19,6 +20,8 @@ namespace Microsoft.Fx.Portability.Reports.DGML
                 return "Unresolved: " + new AssemblyName(Assembly).Name;
             }
         }
+
+
         public ReferenceNode(string AssemblyName, bool unresolved = false)
         {
             Assembly = AssemblyName;
@@ -68,7 +71,7 @@ namespace Microsoft.Fx.Portability.Reports.DGML
                 return availableApis / ((double)availableApis + unavailableApis);
             }
 
-            return 0; // if we can't compute them, assume the worst.
+            return 1; // if we can't compute them, assume the best
         }
 
         public int GetAvailableAPICalls(int target)
