@@ -42,7 +42,7 @@ namespace Microsoft.Fx.Portability.Reports.DGML
 
         public double GetPortabilityIndex(int target)
         {
-            return System.Math.Round(UsageData[target].PortabilityIndex * 100.0, 2);
+            return UsageData[target].PortabilityIndex;
         }
 
         public double GetPortabilityIndexForReferences(int target)
@@ -51,7 +51,7 @@ namespace Microsoft.Fx.Portability.Reports.DGML
             {
                 // if we don't have any outgoing references, it is a good sign!
                 if (Nodes.Count == 0)
-                    return 100;
+                    return 1;
 
                 // sum up the number of calls to available APIs and the ones for not available APIs for references.
                 int availableApis = GetAvailableAPICalls(target);
@@ -65,7 +65,7 @@ namespace Microsoft.Fx.Portability.Reports.DGML
                 if (availableApis == 0 && unavailableApis == 0)
                     return 0;
 
-                return System.Math.Round((availableApis / ((double)availableApis + unavailableApis)) * 100.00, 2);
+                return availableApis / ((double)availableApis + unavailableApis);
             }
 
             return 0; // if we can't compute them, assume the worst.

@@ -46,7 +46,7 @@ namespace Microsoft.Fx.Portability.Reports.DGML
                     {
                         TargetUsageInfo usageInfo = node.UsageData[i];
                         portabilityIndex = node.GetPortabilityIndex(i);
-                        portabilityIndexRefs = node.GetPortabilityIndexForReferences(i);
+                        portabilityIndexRefs = portabilityIndex * node.GetPortabilityIndexForReferences(i);
 
                         missingTypes = GenerateMissingTypes(node.Assembly, analysisResult, i);
                     }
@@ -54,9 +54,11 @@ namespace Microsoft.Fx.Portability.Reports.DGML
                     // generate the node
                     string tfm = targets[i].FullName;
                     dgml.GetOrCreateGuid($"{node.Assembly},TFM:{tfm}", out Guid nodeGuid);
+                    string nodeTitle = $"{node.SimpleName}: {Math.Round(portabilityIndexRefs * 100, 2)}%";
+                    string nodeCategory = node.IsMissing ? "Unresolved" : GetCategory(Math.Round(portabilityIndexRefs * 100, 2));
 
-                    dgml.AddNode(nodeGuid, $"{node.SimpleName}: {portabilityIndex}%, References: {portabilityIndexRefs}%",
-                        node.IsMissing ? "Unresolved" : GetCategory(portabilityIndex * 0.7 + portabilityIndexRefs * 0.3),
+                    dgml.AddNode(nodeGuid, nodeTitle,
+                        nodeCategory,
                         portabilityIndex,
                         group: missingTypes.Length == 0 ? null : "Collapsed");
 
