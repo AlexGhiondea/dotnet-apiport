@@ -40,12 +40,13 @@ namespace Microsoft.Fx.Portability.Reports.DGML
             {
                 for (int i = 0; i < targets.Count; i++)
                 {
-                    double portabilityIndex = 0;
+                    double portabilityIndex = 0, portabilityIndexRefs = 0;
                     string missingTypes = null;
                     if (node.UsageData != null)
                     {
                         TargetUsageInfo usageInfo = node.UsageData[i];
-                        portabilityIndex = Math.Round(usageInfo.PortabilityIndex * 100.0, 2);
+                        portabilityIndex = node.GetPortabilityIndex(i);
+                        portabilityIndexRefs = node.GetPortabilityIndexForReferences(i);
 
                         missingTypes = GenerateMissingTypes(node.Assembly, analysisResult, i);
                     }
@@ -54,8 +55,8 @@ namespace Microsoft.Fx.Portability.Reports.DGML
                     string tfm = targets[i].FullName;
                     dgml.GetOrCreateGuid($"{node.Assembly},TFM:{tfm}", out Guid nodeGuid);
 
-                    dgml.AddNode(nodeGuid, $"{node.SimpleName}, {portabilityIndex}%",
-                        node.IsMissing ? "Unresolved" : GetCategory(portabilityIndex),
+                    dgml.AddNode(nodeGuid, $"{node.SimpleName}: {portabilityIndex}%, References: {portabilityIndexRefs}%",
+                        node.IsMissing ? "Unresolved" : GetCategory(portabilityIndex * 0.7 + portabilityIndexRefs * 0.3),
                         portabilityIndex,
                         group: missingTypes.Length == 0 ? null : "Collapsed");
 
@@ -66,6 +67,7 @@ namespace Microsoft.Fx.Portability.Reports.DGML
 
                     if (!string.IsNullOrEmpty(missingTypes))
                     {
+
                         Guid commentGuid = Guid.NewGuid();
                         dgml.AddNode(commentGuid, missingTypes, "Comment");
                         dgml.AddLink(nodeGuid, commentGuid, "Contains");

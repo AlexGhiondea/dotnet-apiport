@@ -40,6 +40,59 @@ namespace Microsoft.Fx.Portability.Reports.DGML
             return Assembly;
         }
 
+        public double GetPortabilityIndex(int target)
+        {
+            return System.Math.Round(UsageData[target].PortabilityIndex * 100.0, 2);
+        }
+
+        public double GetPortabilityIndexForReferences(int target)
+        {
+            if (ComputePortabilityIndexWithReferences)
+            {
+                // if we don't have any outgoing references, it is a good sign!
+                if (Nodes.Count == 0)
+                    return 100;
+
+                // sum up the number of calls to available APIs and the ones for not available APIs for references.
+                int availableApis = GetAvailableAPICalls(target);
+                int unavailableApis = GetUnavailableAPICalls(target);
+
+                // remove the calls from the current node.
+                availableApis -= UsageData[target].GetAvailableAPICalls();
+                unavailableApis -= UsageData[target].GetUnavailableAPICalls();
+
+                // prevent Div/0
+                if (availableApis == 0 && unavailableApis == 0)
+                    return 0;
+
+                return System.Math.Round((availableApis / ((double)availableApis + unavailableApis)) * 100.00, 2);
+            }
+
+            return 0; // if we can't compute them, assume the worst.
+        }
+
+        public int GetAvailableAPICalls(int target)
+        {
+            int availableApis = UsageData[target].GetAvailableAPICalls();
+            foreach (var item in Nodes)
+            {
+                availableApis += item.GetAvailableAPICalls(target);
+            }
+            return availableApis;
+        }
+
+        public int GetUnavailableAPICalls(int target)
+        {
+            int unavailableApis = UsageData[target].GetUnavailableAPICalls();
+            foreach (var item in Nodes)
+            {
+                unavailableApis += item.GetUnavailableAPICalls(target);
+            }
+            return unavailableApis;
+        }
+
+        public bool ComputePortabilityIndexWithReferences => true;
+
         public List<TargetUsageInfo> UsageData { get; set; }
 
         public string Assembly { get; set; }

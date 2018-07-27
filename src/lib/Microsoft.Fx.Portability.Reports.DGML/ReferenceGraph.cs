@@ -68,7 +68,7 @@ namespace Microsoft.Fx.Portability.Reports.DGML
 
         private bool HasCycles()
         {
-            //TODO: implement
+            //TODO: implement - this will flip the bits on the reference node to disallow combining the portability index.
             return false;
         }
 
