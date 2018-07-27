@@ -10,6 +10,17 @@ namespace Microsoft.Fx.Portability.Reports.DGML
 {
     class ReferenceNode
     {
+        private bool _searchInGraph = false;
+
+        public List<TargetUsageInfo> UsageData { get; set; }
+
+        public string Assembly { get; set; }
+
+        public bool Unresolved { get; set; }
+
+        public HashSet<ReferenceNode> Nodes { get; set; }
+        public bool IsMissing { get; internal set; }
+
         public string SimpleName
         {
             get
@@ -21,13 +32,13 @@ namespace Microsoft.Fx.Portability.Reports.DGML
             }
         }
 
-
         public ReferenceNode(string AssemblyName, bool unresolved = false)
         {
             Assembly = AssemblyName;
             this.Unresolved = unresolved;
             Nodes = new HashSet<ReferenceNode>();
         }
+
         public override int GetHashCode()
         {
             return Assembly.GetHashCode();
@@ -50,16 +61,18 @@ namespace Microsoft.Fx.Portability.Reports.DGML
 
         public double GetPortabilityIndexForReferences(int target)
         {
-            if (ComputePortabilityIndexWithReferences)
+            // if we don't have any outgoing references, it is a good sign!
+            if (Nodes.Count == 0)
+                return 1;
+
+            // sum up the number of calls to available APIs and the ones for not available APIs for references.
+            if (!TryGetAPICountFromReferences(target, out int availableApis, out int unavailableApis))
             {
-                // if we don't have any outgoing references, it is a good sign!
-                if (Nodes.Count == 0)
-                    return 1;
-
-                // sum up the number of calls to available APIs and the ones for not available APIs for references.
-                int availableApis = GetAvailableAPICalls(target);
-                int unavailableApis = GetUnavailableAPICalls(target);
-
+                //cycle detected
+                return 1;
+            }
+            else
+            {
                 // remove the calls from the current node.
                 availableApis -= UsageData[target].GetAvailableAPICalls();
                 unavailableApis -= UsageData[target].GetUnavailableAPICalls();
@@ -70,39 +83,42 @@ namespace Microsoft.Fx.Portability.Reports.DGML
 
                 return availableApis / ((double)availableApis + unavailableApis);
             }
-
-            return 1; // if we can't compute them, assume the best
         }
 
-        public int GetAvailableAPICalls(int target)
+        public bool TryGetAPICountFromReferences(int target, out int availAPIs, out int unavailAPIs)
         {
-            int availableApis = UsageData[target].GetAvailableAPICalls();
+            availAPIs = UsageData[target].GetAvailableAPICalls();
+            unavailAPIs = UsageData[target].GetUnavailableAPICalls();
+
+            // We are going to use a flag on the object to detect if we have a reference cycle while computing the APIs for the references.
+            if (_searchInGraph == true)
+            {
+                //cycle!!!
+                _searchInGraph = false; //reset this flag
+                return false;
+            }
+            else
+            {
+                _searchInGraph = true;
+            }
+
+
             foreach (var item in Nodes)
             {
-                availableApis += item.GetAvailableAPICalls(target);
+                if (!item.TryGetAPICountFromReferences(target, out int refCountAvail, out int refCountUnavail))
+                {
+                    //cycle!
+                    _searchInGraph = false; //reset this flag
+
+                    return false;
+                }
+
+                availAPIs += refCountAvail;
+                unavailAPIs += refCountUnavail;
             }
-            return availableApis;
+
+            _searchInGraph = false;
+            return true;
         }
-
-        public int GetUnavailableAPICalls(int target)
-        {
-            int unavailableApis = UsageData[target].GetUnavailableAPICalls();
-            foreach (var item in Nodes)
-            {
-                unavailableApis += item.GetUnavailableAPICalls(target);
-            }
-            return unavailableApis;
-        }
-
-        public bool ComputePortabilityIndexWithReferences => true;
-
-        public List<TargetUsageInfo> UsageData { get; set; }
-
-        public string Assembly { get; set; }
-
-        public bool Unresolved { get; set; }
-
-        public HashSet<ReferenceNode> Nodes { get; set; }
-        public bool IsMissing { get; internal set; }
     }
 }

@@ -9,9 +9,11 @@ namespace Microsoft.Fx.Portability.Reports.DGML
 {
     class ReferenceGraph
     {
+        public Dictionary<ReferenceNode, ReferenceNode> Nodes { get; set; }
+
         public static ReferenceGraph CreateGraph(AnalyzeResponse response, AnalyzeRequest request)
         {
-            ReferenceGraph rg = new ReferenceGraph();
+           ReferenceGraph rg = new ReferenceGraph();
 
             // get the list of assemblies that have some data reported for them.
             var assembliesWithData = response.ReportingResult.GetAssemblyUsageInfo().ToDictionary(x => x.SourceAssembly.AssemblyIdentity, x => x.UsageData);
@@ -50,29 +52,8 @@ namespace Microsoft.Fx.Portability.Reports.DGML
                 }
             }
 
-            if (rg.HasCycles())
-            {
-                // do nothing as we don't support this scenario.
-                return rg;
-            }
-
-            rg.ComputeNewPortabilityIndex();
-
             return rg;
         }
-
-        private void ComputeNewPortabilityIndex()
-        {
-            // TODO: update the index for the assemblies based on their references.
-        }
-
-        private bool HasCycles()
-        {
-            //TODO: implement - this will flip the bits on the reference node to disallow combining the portability index.
-            return false;
-        }
-
-        public Dictionary<ReferenceNode, ReferenceNode> Nodes { get; set; }
 
         public ReferenceGraph()
         {
