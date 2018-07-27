@@ -58,11 +58,16 @@ namespace Microsoft.Fx.Portability.Reports.DGML
         {
             file = XDocument.Parse(_template);
             XElement root = file.Root;
-            //TODO: root.SetAttributeValue("Title", request.ApplicationName);
 
             nodes = root.Element(_nameSpace + "Nodes");
             links = root.Element(_nameSpace + "Links");
         }
+
+        public void SetTitle(string title)
+        {
+            file.Root.SetAttributeValue("Title", title);
+        }
+
         public bool TryGetId(string value, out Guid frameworkGuid)
         {
             return _nodesDictionary.TryGetValue(value, out frameworkGuid);

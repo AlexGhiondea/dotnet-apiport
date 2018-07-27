@@ -32,6 +32,7 @@ namespace Microsoft.Fx.Portability.Reports.DGML
             ReportingResult analysisResult = response.ReportingResult;
             var targets = analysisResult.Targets;
             GenerateTargetContainers(targets);
+            dgml.SetTitle(response.ApplicationName);
 
             //for each target, let's generate the assemblies
             foreach (var node in rg.Nodes.Keys)
